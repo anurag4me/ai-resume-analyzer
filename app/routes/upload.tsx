@@ -24,27 +24,28 @@ const Upload = () => {
     jobDescription,
     file,
   }: {
-    companyName: string,
-    jobTitle: string,
-    jobDescription: string,
-    file: File
+    companyName: string;
+    jobTitle: string;
+    jobDescription: string;
+    file: File;
   }) => {
     setIsProcessing(true);
     setStatusText("Uploading the file...");
 
     const uploadedFile = await fs.upload([file]);
     if (!uploadedFile) return setStatusText("Error: Failed to upload file");
-    console.log(uploadedFile)
+    console.log(uploadedFile);
 
     setStatusText("Converting to image...");
     const imageFile = await convertPdfToImage(file);
-    if(!imageFile.file) return setStatusText('Error: Failed to convert PDF to Image')
+    if (!imageFile.file)
+      return setStatusText("Error: Failed to convert PDF to Image");
 
-    setStatusText('Uploading the image...')
+    setStatusText("Uploading the image...");
     const uploadedImage = await fs.upload([imageFile.file]);
-    if(!uploadedImage) return setStatusText('Error: Failed to upload Image')
+    if (!uploadedImage) return setStatusText("Error: Failed to upload Image");
 
-    setStatusText('Preparing data...')
+    setStatusText("Preparing data...");
 
     const uuid = generateUUID();
     const data = {
@@ -54,24 +55,28 @@ const Upload = () => {
       companyName,
       jobTitle,
       jobDescription,
-      feedback: '',
-    }
+      feedback: "",
+    };
 
-    await kv.set(`Resume:${uuid}`, JSON.stringify(data))
+    await kv.set(`resume:${uuid}`, JSON.stringify(data));
 
-    setStatusText('Analyzing...')
+    setStatusText("Analyzing...");
 
     const feedback = await ai.feedback(
-      uploadedFile.path, prepareInstructions({jobTitle, jobDescription})
-    )
-    if(!feedback) return setStatusText('Error: Failed to analyze resume')
+      uploadedFile.path,
+      prepareInstructions({ jobTitle, jobDescription })
+    );
+    if (!feedback) return setStatusText("Error: Failed to analyze resume");
 
-    const feedbackText = typeof feedback.message.content === 'string' ? feedback.message.content : feedback.message.content[0].text;
+    const feedbackText =
+      typeof feedback.message.content === "string"
+        ? feedback.message.content
+        : feedback.message.content[0].text;
 
-    data.feedback = JSON.parse(feedbackText)
-    await kv.set('Resume:${uuid}', JSON.stringify(data));
-    setStatusText('Analysis completed, redirecting...')
-    console.log(data);
+    data.feedback = JSON.parse(feedbackText);
+    await kv.set(`resume:${uuid}`, JSON.stringify(data));
+    setStatusText("Analysis completed, redirecting...");
+    navigate(`/resume/${uuid}`);
   };
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
