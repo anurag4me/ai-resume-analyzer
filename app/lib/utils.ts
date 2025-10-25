@@ -20,4 +20,6 @@ export function formatSize(bytes: number): string {
   return `${value.toFixed(decimals)} ${units[i]}`;
 }
 
-export default formatSize;
+export function generateUUID() {
+  return crypto.randomUUID();
+}
