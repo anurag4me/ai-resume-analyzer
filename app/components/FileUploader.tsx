@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { formatSize } from "~/lib/utils";
 
@@ -7,12 +7,18 @@ interface FileUploaderProps {
 }
 
 const FileUploader = ({ onFileSelect }: FileUploaderProps) => {
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  const onDrop = useCallback(
+    (acceptedFiles: File[]) => {
       const file = acceptedFiles[0] || null;
-
+      setSelectedFile(file);
       onFileSelect?.(file);
-    }, [onFileSelect]);
+    },
+    [onFileSelect]
+  );
 
   const maxFileSize = 20 * 1024 * 1024; // 20MB in bytes
 
@@ -20,16 +26,38 @@ const FileUploader = ({ onFileSelect }: FileUploaderProps) => {
     useDropzone({
       onDrop,
       multiple: false,
-      accept: { 'application/pdf': ['.pdf'] },
+      accept: { "application/pdf": [".pdf"] },
       maxSize: maxFileSize,
     });
 
-  const file = acceptedFiles[0] || null;
+  // Preserve react-dropzone's input props (including its internal ref) while
+  // keeping a local ref so we can clear the native input value when needed.
+  const inputProps = getInputProps();
+  const { ref: providedRef, ...restInputProps } = inputProps as any;
+
+  const handleInputRef = (node: HTMLInputElement | null) => {
+    inputRef.current = node;
+    if (!providedRef) return;
+    if (typeof providedRef === "function") providedRef(node);
+    else if (providedRef && typeof providedRef === "object")
+      providedRef.current = node;
+  };
+
+  // Keep local selectedFile in sync with react-dropzone's acceptedFiles
+  useEffect(() => {
+    const f = acceptedFiles[0] || null;
+    setSelectedFile(f);
+    // don't call onFileSelect here to avoid duplicate notifications when onDrop already did
+    // but if acceptedFiles is changed externally, notify parent as well
+    // (safe because onDrop also sets selectedFile)
+  }, [acceptedFiles]);
+
+  const file = selectedFile;
 
   return (
     <div className="w-full gradient-border">
       <div {...getRootProps()}>
-        <input {...getInputProps()} />
+        <input {...restInputProps} ref={handleInputRef} />
 
         <div className="space-y-4 cursor-pointer">
           {file ? (
@@ -51,7 +79,18 @@ const FileUploader = ({ onFileSelect }: FileUploaderProps) => {
               <button
                 className="p-2 cursor-pointer"
                 onClick={(e) => {
-                  onFileSelect?.(null)
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setSelectedFile(null);
+                  if (inputRef.current) {
+                    // clear the underlying file input so react-dropzone no longer holds the file
+                    try {
+                      inputRef.current.value = "";
+                    } catch (err) {
+                      /* ignore */
+                    }
+                  }
+                  onFileSelect?.(null);
                 }}
               >
                 <img src="/icons/cross.svg" alt="remove" className="w-4 h-4" />
@@ -66,7 +105,9 @@ const FileUploader = ({ onFileSelect }: FileUploaderProps) => {
                 <span className="font-semibold">Click to upload</span> or drag
                 and drop
               </p>
-              <p className="text-lg text-gray-500">PDF (max {formatSize(maxFileSize)})</p>
+              <p className="text-lg text-gray-500">
+                PDF (max {formatSize(maxFileSize)})
+              </p>
             </div>
           )}
         </div>
